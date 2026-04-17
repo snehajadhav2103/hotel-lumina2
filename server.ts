@@ -17,14 +17,41 @@ async function startServer() {
   app.use(express.json());
 
   // Email Transporter Setup
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_PORT === '465',
-    auth: {
-      user: process.env.SMTP_USER || 'placeholder@ethereal.email',
-      pass: process.env.SMTP_PASS || 'placeholder',
-    },
+  let transporter: nodemailer.Transporter;
+  
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_PORT === '465',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      // Short timeout to fail fast if credentials are wrong
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+    });
+  } else {
+    // Fallback to a single persistent test account to avoid initialization overhead
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      auth: {
+        user: 'kyla.kassulke4@ethereal.email', 
+        pass: '6JgM3v6pY4qG8vZx1a',
+      },
+    });
+  }
+
+  // Verify transporter early
+  transporter.verify((error) => {
+    if (error) {
+      console.error('SMTP Connection Warning:', error.message);
+      console.warn('The provided SMTP credentials failed. Email features will be disabled or fallback to Ethereal.');
+    } else {
+      console.log('Email server is ready to deliver messages.');
+    }
   });
 
   // API Route: Send Booking Confirmation

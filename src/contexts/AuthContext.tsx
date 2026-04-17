@@ -20,28 +20,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setProfile({
-            ...userDoc.data(),
-            createdAt: userDoc.data().createdAt.toDate(),
-          } as UserProfile);
-        } else {
-          // Create a new profile if it doesn't exist
-          const newProfile: UserProfile = {
-            uid: user.uid,
-            email: user.email!,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            role: user.email === 'snehajadhavsj21@gmail.com' ? 'admin' : 'user', // Default admin logic
-            createdAt: new Date(),
-          };
-          await setDoc(doc(db, 'users', user.uid), newProfile);
-          setProfile(newProfile);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            setProfile({
+              ...userDoc.data(),
+              createdAt: userDoc.data().createdAt?.toDate() || new Date(),
+            } as UserProfile);
+          } else {
+            // Create a new profile if it doesn't exist
+            const newProfile: UserProfile = {
+              uid: user.uid,
+              email: user.email!,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              role: user.email === 'snehajadhavsj21@gmail.com' ? 'admin' : 'user',
+              createdAt: new Date(),
+            };
+            await setDoc(doc(db, 'users', user.uid), newProfile);
+            setProfile(newProfile);
+          }
+        } catch (err) {
+          console.error('Error fetching/creating profile:', err);
         }
       } else {
         setProfile(null);
@@ -53,10 +59,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error('Login failed:', error);
+    } catch (error: any) {
+      if (error.code === 'auth/cancelled-popup-request') {
+        // This is safe to ignore, it just means another request was started
+        console.warn('Login popup request was superseded.');
+      } else if (error.code === 'auth/popup-blocked') {
+        alert('Please enable popups for this site to sign in.');
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        // User closed the window, ignore
+      } else {
+        console.error('Login failed:', error);
+      }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
