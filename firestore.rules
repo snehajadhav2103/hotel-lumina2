@@ -1,0 +1,139 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - uid: string (required) - Firebase Auth UID
+//   - email: string (required) - User email
+//   - displayName: string (optional) - User's name
+//   - photoURL: string (optional) - Profile pic URL
+//   - role: string (required, 'admin' | 'user') - Access level
+//   - createdAt: timestamp (required) - Account creation date
+//
+// Collection: rooms
+// Document ID: {roomId}
+// Fields:
+//   - name: string (required)
+//   - description: string (required)
+//   - pricePerNight: number (required)
+//   - image: string (required, URL)
+//   - type: string (required, 'Standard' | 'Deluxe' | 'Suite' | 'Penthouse')
+//   - capacity: number (required)
+//   - amenities: list (required)
+//   - isAvailable: bool (required)
+//   - createdAt: timestamp (required)
+//
+// Collection: bookings
+// Document ID: {bookingId}
+// Fields:
+//   - userId: string (required)
+//   - userEmail: string (required)
+//   - roomId: string (required)
+//   - roomName: string (required)
+//   - checkIn: timestamp (required)
+//   - checkOut: timestamp (required)
+//   - status: string (required, 'pending' | 'confirmed' | 'cancelled')
+//   - totalPrice: number (required)
+//   - createdAt: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "snehajadhavsj21@gmail.com" && request.auth.token.email_verified == true ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
+      );
+    }
+
+    // Validation Blueprints
+    function isValidUser(data) {
+      let requiredFields = ['uid', 'email', 'role', 'createdAt'];
+      return data.keys().hasAll(requiredFields) &&
+             data.uid == request.auth.uid &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role in ['admin', 'user'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidRoom(data) {
+      let requiredFields = ['name', 'description', 'pricePerNight', 'image', 'type', 'capacity', 'amenities', 'isAvailable', 'createdAt'];
+      return data.keys().hasAll(requiredFields) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.pricePerNight is number && data.pricePerNight >= 0 &&
+             data.type in ['Standard', 'Deluxe', 'Suite', 'Penthouse'] &&
+             data.capacity is number && data.capacity > 0 &&
+             data.amenities is list &&
+             data.isAvailable is bool &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidBooking(data) {
+      let requiredFields = ['userId', 'roomId', 'checkIn', 'checkOut', 'status', 'totalPrice', 'createdAt'];
+      return data.keys().hasAll(requiredFields) &&
+             data.userId == request.auth.uid &&
+             data.roomId is string &&
+             data.status in ['pending', 'confirmed', 'cancelled'] &&
+             data.totalPrice is number && data.totalPrice >= 0 &&
+             data.checkIn is timestamp && data.checkOut is timestamp &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      // No blanket list for users
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isSignedIn() && (
+        (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || 
+        isAdmin()
+      );
+    }
+
+    match /rooms/{roomId} {
+      allow get: if isValidId(roomId);
+      allow list: if true; // Publicly viewable
+      allow create, update: if isAdmin() && isValidRoom(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidBooking(request.resource.data);
+      allow update: if isSignedIn() && (
+        (resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status == 'cancelled') ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}

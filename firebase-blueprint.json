@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User's full name" },
+        "photoURL": { "type": "string", "format": "url", "description": "User's profile picture URL" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User's access level" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Hotel room details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Room name or number" },
+        "description": { "type": "string", "description": "Detailed room description" },
+        "pricePerNight": { "type": "number", "description": "Cost per night in USD" },
+        "image": { "type": "string", "format": "url", "description": "Room image URL" },
+        "type": { "type": "string", "enum": ["Standard", "Deluxe", "Suite", "Penthouse"], "description": "Room category" },
+        "capacity": { "type": "number", "description": "Maximum number of guests" },
+        "amenities": { "type": "array", "description": "List of available amenities" },
+        "isAvailable": { "type": "boolean", "description": "Current availability status" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "pricePerNight", "type", "isAvailable"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Room reservation records",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Reference to the User UID" },
+        "userEmail": { "type": "string", "description": "Email of the guest" },
+        "roomId": { "type": "string", "description": "Reference to the Room ID" },
+        "roomName": { "type": "string", "description": "Name of the booked room" },
+        "checkIn": { "type": "string", "format": "date-time", "description": "Check-in date" },
+        "checkOut": { "type": "string", "format": "date-time", "description": "Check-out date" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"], "description": "Booking status" },
+        "totalPrice": { "type": "number", "description": "Total stay cost" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "roomId", "checkIn", "checkOut", "status", "totalPrice"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Storage for user profiles"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Storage for hotel rooms"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Storage for room reservations"
+    }
+  }
+}
